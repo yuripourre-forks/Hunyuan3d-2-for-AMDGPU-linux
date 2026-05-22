@@ -1,0 +1,15 @@
+--- a/setup.py
++++ b/setup.py
+@@ -6,9 +6,9 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+ # nvcc is needed
+ 
+ custom_rasterizer_module = CUDAExtension('custom_rasterizer_kernel', [
+-    'lib/custom_rasterizer_kernel/rasterizer.cpp',
+-    'lib/custom_rasterizer_kernel/grid_neighbor.cpp',
+-    'lib/custom_rasterizer_kernel/rasterizer_gpu.cu',
++    'lib/custom_rasterizer_kernel/rasterizer_hip.cpp',
++    'lib/custom_rasterizer_kernel/grid_neighbor_hip.cpp',
++    'lib/custom_rasterizer_kernel/rasterizer_gpu.hip',
+ ])
+ 
+ setup(

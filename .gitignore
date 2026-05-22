@@ -1,0 +1,15 @@
+.venv/
+vendor/
+config/port
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+
+# Hipified custom_rasterizer intermediates (under vendor after build)
+**/custom_rasterizer_kernel/*_hip.*
+**/custom_rasterizer_kernel/*.hip
+
+# Flash-attention clone during install
+flash-attention/

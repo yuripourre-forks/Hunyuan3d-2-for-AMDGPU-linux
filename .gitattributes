@@ -1,3 +1,0 @@
-pyvers/PY310.tar.xz filter=lfs diff=lfs merge=lfs -text
-pyvers/py310.tar.xz filter=lfs diff=lfs merge=lfs -text
-pyvers/py313.tar.xz filter=lfs diff=lfs merge=lfs -text
