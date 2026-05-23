@@ -655,7 +655,7 @@ if __name__ == '__main__':
     parser.add_argument('--mc_algo', type=str, default='mc')
     parser.add_argument('--cache-path', type=str, default='gradio_cache')
     parser.add_argument('--enable_t23d', action='store_true')
-    parser.add_argument('--disable_tex', action='store_true')
+    parser.add_argument('--no-texture', action='store_true')
     parser.add_argument('--enable_flashvdm', action='store_true')
     parser.add_argument('--compile', action='store_true')
     parser.add_argument('--low_vram_mode', action='store_true')
@@ -691,7 +691,7 @@ if __name__ == '__main__':
     SUPPORTED_FORMATS = ['glb', 'obj', 'ply', 'stl']
 
     HAS_TEXTUREGEN = False
-    if not args.disable_tex:
+    if not args.no_texture:
         try:
             from hy3dgen.texgen import Hunyuan3DPaintPipeline
 

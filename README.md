@@ -65,7 +65,7 @@ If you already ran `./scripts/bootstrap-rasterizer.sh`, complete the app stack t
 ./scripts/run.sh
 ```
 
-`install.sh` and `install-app.sh` **prefetch public Hugging Face weights without login** (same as the original installer: models are public Tencent repos). No `huggingface-cli login` is required.
+`install.sh` and `install-app.sh` **prefetch public Hugging Face weights without login** (same as the original installer: models are public Tencent repos). No `huggingface-cli login` is required. Re-running install **skips download** when weights are already in the Hugging Face cache (`~/.cache/huggingface/hub` by default); only missing subfolders are fetched.
 
 To download or refresh models only:
 
@@ -87,8 +87,99 @@ Options:
 ```bash
 GRADIO_PORT=9000 ./scripts/run.sh
 ./scripts/run.sh --no-flashvdm          # if install-app skipped flash-attention
-./scripts/run.sh --disable_tex        # shape only, no texture pipeline
+./scripts/run.sh --no-texture         # shape only, no texture pipeline
 ```
+
+## REST API
+
+API-only FastAPI server (no Gradio UI). Loads single-view, multiview, and texture pipelines in one process. Requests are **synchronous** (the connection stays open until the mesh file is ready; generation can take several minutes).
+
+```bash
+./scripts/install.sh          # or install-app.sh after bootstrap
+./scripts/run-api.sh          # http://127.0.0.1:8081
+```
+
+OpenAPI docs: `http://127.0.0.1:8081/docs`
+
+Options:
+
+```bash
+API_PORT=9001 ./scripts/run-api.sh
+./scripts/run-api.sh --no-flashvdm
+./scripts/run-api.sh --no-multiview      # single-view only (MV loads on first multiview call)
+./scripts/run-api.sh --no-single-view    # multiview only (loads MV at startup, skips single-view)
+./scripts/run-api.sh --no-texture        # mesh endpoints only; texture returns 503
+```
+
+Shape model loading (pick one mode; do not combine `--no-multiview` and `--no-single-view`):
+
+| Flag | Startup loads | Endpoints |
+|------|----------------|-----------|
+| (default) | Single-view + texture; multiview on first use | All |
+| `--no-multiview` | Single-view + texture only | No multiview routes (503) |
+| `--no-single-view` | Multiview + texture only | No single-image shape routes (503) |
+
+Multiview weights (`tencent/Hunyuan3D-2mv`, ~5GB) load at startup in multiview-only mode, or on first multiview request otherwise. Prefetch with `./scripts/download-models.sh`. If install reported models cached but multiview still downloads, re-run `download-models.sh` — only `config.yaml` in cache means weights were incomplete.
+
+Prefetch models before first API call (recommended):
+
+```bash
+./scripts/download-models.sh
+```
+
+### Endpoints
+
+All endpoints use `POST` with `multipart/form-data`. The response body is the mesh file (`glb` by default). Stats (timings, face count, seed) are in the `X-Hunyuan-Stats` JSON header.
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/mesh/from-image` | Untextured mesh from one image (`image` field) |
+| `POST /v1/mesh/from-multiview` | Untextured mesh from 1–4 views (`front`, `back`, `left`, `right`) |
+| `POST /v1/texture` | Texture an existing mesh (`mesh` + `image` or repeated `images`) |
+| `POST /v1/mesh/textured` | Shape + texture from `image` or multiview fields |
+
+Optional form fields (all endpoints): `steps` (default `5`), `guidance_scale` (`5.0`), `seed`, `randomize_seed`, `octree_resolution` (`256`), `remove_background` (`true`), `num_chunks` (`8000`), `output_format` (`glb`, `obj`, `ply`, `stl`).
+
+### Examples
+
+Mesh from a single image:
+
+```bash
+curl -X POST http://127.0.0.1:8081/v1/mesh/from-image \
+  -F "image=@input.png" \
+  -F "remove_background=true" \
+  -o white_mesh.glb
+```
+
+Mesh from multiview images:
+
+```bash
+curl -X POST http://127.0.0.1:8081/v1/mesh/from-multiview \
+  -F "front=@front.png" \
+  -F "back=@back.png" \
+  -F "left=@left.png" \
+  -F "right=@right.png" \
+  -o white_mesh.glb
+```
+
+Texture an existing mesh:
+
+```bash
+curl -X POST http://127.0.0.1:8081/v1/texture \
+  -F "mesh=@model.glb" \
+  -F "image=@reference.png" \
+  -o textured_mesh.glb
+```
+
+Full textured model from one image:
+
+```bash
+curl -X POST http://127.0.0.1:8081/v1/mesh/textured \
+  -F "image=@input.png" \
+  -o textured_mesh.glb
+```
+
+**Notes:** Only one GPU job runs at a time (`workers=1`). Loading all pipelines needs substantial VRAM; `--low_vram_mode` is enabled by default in `run-api.sh`.
 
 ## Rasterizer-only build (fast)
 
@@ -112,8 +203,11 @@ scripts/
   build-custom-rasterizer.sh # hipify + build texture rasterizer
   build-flash-attention.sh   # ROCm flash-attention
   run.sh / run-multiview.sh  # launch Gradio (with preflight checks)
+  run-api.sh                 # launch REST API
 patches/                     # setup.py patch for HIP sources
 gradio_app.py                # copied into vendor/Hunyuan3D-2 on install
+api_server.py                # REST API (copied on install)
+hunyuan3d_service.py         # pipeline service layer (copied on install)
 vendor/Hunyuan3D-2/          # cloned upstream (gitignored)
 .venv/                       # Python virtualenv (gitignored)
 ```
@@ -151,7 +245,7 @@ Some users report the extension build succeeds on Arch but fails on Ubuntu with 
 
 ## Configuration
 
-Edit [`config/defaults.env`](config/defaults.env) or export variables before `install.sh`, `install-app.sh`, or `run.sh`:
+Edit [`config/defaults.env`](config/defaults.env) or export variables before `install.sh`, `install-app.sh`, `run.sh`, or `run-api.sh`:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
@@ -159,3 +253,4 @@ Edit [`config/defaults.env`](config/defaults.env) or export variables before `in
 | `TORCH_VERSION` | `2.7.1` | PyTorch version |
 | `PYTORCH_ROCM_INDEX` | rocm6.3 index URL | pip index for ROCm wheels |
 | `GRADIO_PORT` | `8080` | Web UI port |
+| `API_PORT` | `8081` | REST API port |

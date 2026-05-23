@@ -1,5 +1,8 @@
 # Runtime dependencies (PyTorch ROCm installed separately by scripts/install.sh)
 accelerate==1.7.0
+fastapi==0.115.12
+python-multipart==0.0.20
+uvicorn==0.34.2
 diffusers==0.33.1
 einops==0.8.0
 gradio==5.33.0
